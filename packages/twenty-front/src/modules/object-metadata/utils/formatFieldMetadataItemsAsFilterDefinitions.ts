@@ -8,7 +8,7 @@ export const getRelationObjectMetadataNameSingular = ({
 }: {
   field: ObjectMetadataItem['fields'][0];
 }): string | undefined => {
-  return field.relationDefinition?.targetObjectMetadata.nameSingular;
+  return field.relation?.targetObjectMetadata.nameSingular;
 };
 
 export const getFilterTypeFromFieldType = (
@@ -51,6 +51,8 @@ export const getFilterTypeFromFieldType = (
       return 'BOOLEAN';
     case FieldMetadataType.TS_VECTOR:
       return 'TS_VECTOR';
+    case FieldMetadataType.UUID:
+      return 'UUID';
     default:
       return 'TEXT';
   }

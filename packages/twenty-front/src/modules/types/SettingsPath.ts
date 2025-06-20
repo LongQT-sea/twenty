@@ -33,6 +33,7 @@ export enum SettingsPath {
   NewSSOIdentityProvider = 'security/sso/new',
   NewApprovedAccessDomain = 'security/approved-access-domain/new',
   Webhooks = 'webhooks',
+  NewWebhook = 'webhooks/new',
   WebhookDetail = 'webhooks/:webhookId',
   Releases = 'releases',
   AdminPanel = 'admin-panel',
@@ -44,4 +45,5 @@ export enum SettingsPath {
   RoleCreate = 'roles/create',
   RoleDetail = 'roles/:roleId',
   RoleObjectLevel = 'roles/:roleId/object/:objectMetadataId',
+  RoleAddObjectLevel = 'roles/:roleId/add-object-permission',
 }

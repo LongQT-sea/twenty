@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { FieldMetadataType } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
 
 import {
   ObjectRecord,
@@ -21,8 +22,9 @@ import {
 import { FieldMetadataInterface } from 'src/engine/metadata-modules/field-metadata/interfaces/field-metadata.interface';
 
 import { RecordPositionService } from 'src/engine/core-modules/record-position/services/record-position.service';
-import { FieldMetadataMap } from 'src/engine/metadata-modules/types/field-metadata-map';
 import { RecordInputTransformerService } from 'src/engine/core-modules/record-transformer/services/record-input-transformer.service';
+import { workspaceValidator } from 'src/engine/core-modules/workspace/workspace.validate';
+import { FieldMetadataMap } from 'src/engine/metadata-modules/types/field-metadata-map';
 
 type ArgPositionBackfillInput = {
   argIndex?: number;
@@ -167,11 +169,14 @@ export class QueryRunnerArgsFactory {
     fieldMetadataMapByNameByName: Record<string, FieldMetadataInterface>,
     argPositionBackfillInput: ArgPositionBackfillInput,
   ): Promise<Partial<ObjectRecord>> {
-    if (!data) {
+    if (!isDefined(data)) {
       return Promise.resolve({});
     }
 
-    const workspaceId = options.authContext.workspace.id;
+    const workspace = options.authContext.workspace;
+
+    workspaceValidator.assertIsDefinedOrThrow(workspace);
+
     let isFieldPositionPresent = false;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -192,7 +197,7 @@ export class QueryRunnerArgsFactory {
           const newValue = await this.recordPositionService.buildRecordPosition(
             {
               value,
-              workspaceId,
+              workspaceId: workspace.id,
               objectMetadata: {
                 isCustom: options.objectMetadataItemWithFieldMaps.isCustom,
                 nameSingular:
@@ -206,6 +211,7 @@ export class QueryRunnerArgsFactory {
         }
         case FieldMetadataType.NUMBER:
         case FieldMetadataType.RICH_TEXT:
+        case FieldMetadataType.PHONES:
         case FieldMetadataType.RICH_TEXT_V2:
         case FieldMetadataType.LINKS:
         case FieldMetadataType.EMAILS: {
@@ -234,7 +240,7 @@ export class QueryRunnerArgsFactory {
           'position',
           await this.recordPositionService.buildRecordPosition({
             value: 'first',
-            workspaceId,
+            workspaceId: workspace.id,
             objectMetadata: {
               isCustom: options.objectMetadataItemWithFieldMaps.isCustom,
               nameSingular:

@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
 import { PermissionsOnAllObjectRecords } from 'twenty-shared/constants';
-import { ObjectRecordsPermissions } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import {
@@ -16,6 +15,7 @@ import {
   PermissionsExceptionCode,
   PermissionsExceptionMessage,
 } from 'src/engine/metadata-modules/permissions/permissions.exception';
+import { UserWorkspacePermissions } from 'src/engine/metadata-modules/permissions/types/user-workspace-permissions';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { WorkspacePermissionsCacheService } from 'src/engine/metadata-modules/workspace-permissions-cache/workspace-permissions-cache.service';
 
@@ -27,17 +27,13 @@ export class PermissionsService {
     private readonly featureFlagService: FeatureFlagService,
   ) {}
 
-  public async getUserWorkspacePermissionsV2({
+  public async getUserWorkspacePermissions({
     userWorkspaceId,
     workspaceId,
   }: {
     userWorkspaceId: string;
     workspaceId: string;
-  }): Promise<{
-    settingsPermissions: Record<SettingPermissionType, boolean>;
-    objectRecordsPermissions: Record<PermissionsOnAllObjectRecords, boolean>;
-    objectPermissions: ObjectRecordsPermissions;
-  }> {
+  }): Promise<UserWorkspacePermissions> {
     const [roleOfUserWorkspace] = await this.userRoleService
       .getRolesByUserWorkspaces({
         userWorkspaceIds: [userWorkspaceId],
@@ -60,7 +56,9 @@ export class PermissionsService {
 
     const settingPermissions = roleOfUserWorkspace.settingPermissions ?? [];
 
-    const settingsPermissionsMap = Object.keys(SettingPermissionType).reduce(
+    const defaultSettingsPermissions =
+      this.getDefaultUserWorkspacePermissions().settingsPermissions;
+    const settingsPermissions = Object.keys(SettingPermissionType).reduce(
       (acc, feature) => ({
         ...acc,
         [feature]:
@@ -69,7 +67,7 @@ export class PermissionsService {
             (settingPermission) => settingPermission.setting === feature,
           ),
       }),
-      {} as Record<SettingPermissionType, boolean>,
+      defaultSettingsPermissions,
     );
 
     const { data: rolesPermissions } =
@@ -79,90 +77,45 @@ export class PermissionsService {
 
     const objectPermissions = rolesPermissions[roleOfUserWorkspace.id] ?? {};
 
-    const objectRecordsPermissionsMap: Record<
-      PermissionsOnAllObjectRecords,
-      boolean
-    > = {
-      [PermissionsOnAllObjectRecords.READ_ALL_OBJECT_RECORDS]:
-        roleOfUserWorkspace.canReadAllObjectRecords ?? false,
-      [PermissionsOnAllObjectRecords.UPDATE_ALL_OBJECT_RECORDS]:
-        roleOfUserWorkspace.canUpdateAllObjectRecords ?? false,
-      [PermissionsOnAllObjectRecords.SOFT_DELETE_ALL_OBJECT_RECORDS]:
-        roleOfUserWorkspace.canSoftDeleteAllObjectRecords ?? false,
-      [PermissionsOnAllObjectRecords.DESTROY_ALL_OBJECT_RECORDS]:
-        roleOfUserWorkspace.canDestroyAllObjectRecords ?? false,
-    };
+    const objectRecordsPermissions: UserWorkspacePermissions['objectRecordsPermissions'] =
+      {
+        [PermissionsOnAllObjectRecords.READ_ALL_OBJECT_RECORDS]:
+          roleOfUserWorkspace.canReadAllObjectRecords ?? false,
+        [PermissionsOnAllObjectRecords.UPDATE_ALL_OBJECT_RECORDS]:
+          roleOfUserWorkspace.canUpdateAllObjectRecords ?? false,
+        [PermissionsOnAllObjectRecords.SOFT_DELETE_ALL_OBJECT_RECORDS]:
+          roleOfUserWorkspace.canSoftDeleteAllObjectRecords ?? false,
+        [PermissionsOnAllObjectRecords.DESTROY_ALL_OBJECT_RECORDS]:
+          roleOfUserWorkspace.canDestroyAllObjectRecords ?? false,
+      };
 
     return {
-      settingsPermissions: settingsPermissionsMap,
-      objectRecordsPermissions: objectRecordsPermissionsMap,
+      settingsPermissions,
+      objectRecordsPermissions,
       objectPermissions,
     };
   }
 
-  public async getUserWorkspacePermissions({
-    userWorkspaceId,
-    workspaceId,
-  }: {
-    userWorkspaceId: string;
-    workspaceId: string;
-  }): Promise<{
-    settingsPermissions: Record<SettingPermissionType, boolean>;
-    objectRecordsPermissions: Record<PermissionsOnAllObjectRecords, boolean>;
-  }> {
-    const [roleOfUserWorkspace] = await this.userRoleService
-      .getRolesByUserWorkspaces({
-        userWorkspaceIds: [userWorkspaceId],
-        workspaceId,
-      })
-      .then((roles) => roles?.get(userWorkspaceId) ?? []);
-
-    let hasPermissionOnSettingFeature = false;
-
-    if (!isDefined(roleOfUserWorkspace)) {
-      throw new PermissionsException(
-        PermissionsExceptionMessage.NO_ROLE_FOUND_FOR_USER_WORKSPACE,
-        PermissionsExceptionCode.NO_ROLE_FOUND_FOR_USER_WORKSPACE,
-      );
-    }
-
-    if (roleOfUserWorkspace.canUpdateAllSettings === true) {
-      hasPermissionOnSettingFeature = true;
-    }
-
-    const settingPermissions = roleOfUserWorkspace.settingPermissions ?? [];
-
-    const settingsPermissionsMap = Object.keys(SettingPermissionType).reduce(
-      (acc, feature) => ({
-        ...acc,
-        [feature]:
-          hasPermissionOnSettingFeature ||
-          settingPermissions.some(
-            (settingPermission) => settingPermission.setting === feature,
-          ),
-      }),
-      {} as Record<SettingPermissionType, boolean>,
-    );
-
-    const objectRecordsPermissionsMap: Record<
-      PermissionsOnAllObjectRecords,
-      boolean
-    > = {
-      [PermissionsOnAllObjectRecords.READ_ALL_OBJECT_RECORDS]:
-        roleOfUserWorkspace.canReadAllObjectRecords ?? false,
-      [PermissionsOnAllObjectRecords.UPDATE_ALL_OBJECT_RECORDS]:
-        roleOfUserWorkspace.canUpdateAllObjectRecords ?? false,
-      [PermissionsOnAllObjectRecords.SOFT_DELETE_ALL_OBJECT_RECORDS]:
-        roleOfUserWorkspace.canSoftDeleteAllObjectRecords ?? false,
-      [PermissionsOnAllObjectRecords.DESTROY_ALL_OBJECT_RECORDS]:
-        roleOfUserWorkspace.canDestroyAllObjectRecords ?? false,
-    };
-
-    return {
-      settingsPermissions: settingsPermissionsMap,
-      objectRecordsPermissions: objectRecordsPermissionsMap,
-    };
-  }
+  public getDefaultUserWorkspacePermissions = () =>
+    ({
+      objectRecordsPermissions: {
+        [PermissionsOnAllObjectRecords.READ_ALL_OBJECT_RECORDS]: false,
+        [PermissionsOnAllObjectRecords.UPDATE_ALL_OBJECT_RECORDS]: false,
+        [PermissionsOnAllObjectRecords.SOFT_DELETE_ALL_OBJECT_RECORDS]: false,
+        [PermissionsOnAllObjectRecords.DESTROY_ALL_OBJECT_RECORDS]: false,
+      },
+      settingsPermissions: {
+        [SettingPermissionType.API_KEYS_AND_WEBHOOKS]: false,
+        [SettingPermissionType.WORKSPACE]: false,
+        [SettingPermissionType.WORKSPACE_MEMBERS]: false,
+        [SettingPermissionType.ROLES]: false,
+        [SettingPermissionType.DATA_MODEL]: false,
+        [SettingPermissionType.ADMIN_PANEL]: false,
+        [SettingPermissionType.SECURITY]: false,
+        [SettingPermissionType.WORKFLOWS]: false,
+      },
+      objectPermissions: {},
+    }) as const satisfies UserWorkspacePermissions;
 
   public async userHasWorkspaceSettingPermission({
     userWorkspaceId,
@@ -226,11 +179,13 @@ export class PermissionsService {
     workspaceId,
     requiredPermission,
     isExecutedByApiKey,
+    objectMetadataId,
   }: {
     userWorkspaceId?: string;
     workspaceId: string;
     requiredPermission: PermissionsOnAllObjectRecords;
     isExecutedByApiKey: boolean;
+    objectMetadataId: string;
   }): Promise<boolean> {
     const isPermissionsV2Enabled =
       await this.featureFlagService.isFeatureEnabled(
@@ -279,11 +234,10 @@ export class PermissionsService {
     const objectPermissionKey =
       this.getObjectPermissionKeyForRequiredPermission(requiredPermission);
 
-    // until permissions V2 is enabled all objects have the same permission values deriving from role, ex role.canReadAllObjectRecords
     const objectPermissionValue =
-      rolePermissionsForUserWorkspaceRole[
-        Object.keys(rolePermissionsForUserWorkspaceRole)[0]
-      ]?.[objectPermissionKey];
+      rolePermissionsForUserWorkspaceRole[objectMetadataId]?.[
+        objectPermissionKey
+      ];
 
     return objectPermissionValue === true;
   }
